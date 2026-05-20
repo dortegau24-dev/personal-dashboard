@@ -1,5 +1,6 @@
 'use client';
 
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { MOCK_TICKER, type TickerItem, type TickerSeverity } from '@/lib/ticker-mock';
 import { cn } from '@/lib/utils';
@@ -33,7 +34,28 @@ function Item({ item }: { item: TickerItem }) {
 }
 
 export function Ticker() {
-  const doubled = [...MOCK_TICKER, ...MOCK_TICKER];
+  const [items, setItems] = useState<TickerItem[]>(MOCK_TICKER);
+
+  useEffect(() => {
+    let mounted = true;
+    async function load() {
+      try {
+        const res = await fetch('/api/ticker');
+        if (res.ok) {
+          const data: TickerItem[] = await res.json();
+          if (mounted && data.length > 0) setItems(data);
+        }
+      } catch {
+        // Keep mock data on failure
+      }
+    }
+    load();
+    const interval = setInterval(load, 60_000); // Refresh every minute
+    return () => { mounted = false; clearInterval(interval); };
+  }, []);
+
+  const doubled = [...items, ...items];
+
   return (
     <div className="glass-strong sticky top-0 z-50 border-t-0 border-x-0 rounded-none border-b border-white/[0.06]">
       <div className="ticker-mask overflow-hidden h-9 flex items-center">

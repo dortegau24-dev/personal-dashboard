@@ -1,78 +1,78 @@
-import { GlassCard } from '@/components/GlassCard';
-import { Sparkles, TrendingUp, Activity, Flame, Heart } from 'lucide-react';
+import { redirect } from 'next/navigation';
+import { createClient } from '@/lib/supabase/server';
+import { HomeDashboard } from './HomeDashboard';
+import { today, daysAgo } from '@/lib/dates';
 
-const STATS = [
-  { label: 'AI Daily Score', value: '8.4', sub: '/ 10', tone: 'gold',   icon: Sparkles },
-  { label: 'Net Worth',      value: '$142.7K', sub: '+2.1%',  tone: 'silver', icon: TrendingUp },
-  { label: 'Recovery',       value: '78%',     sub: 'green',  tone: 'success', icon: Heart },
-  { label: 'Strain',         value: '14.2',    sub: 'high',   tone: 'bronze', icon: Activity },
-  { label: 'Top Streak',     value: '42',      sub: 'days',   tone: 'gold',   icon: Flame },
-];
+export default async function HomePage() {
+  const supabase = createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) redirect('/login');
 
-const TONE_TEXT: Record<string, string> = {
-  gold: 'text-gold-gradient',
-  silver: 'text-silver',
-  bronze: 'text-bronze',
-  success: 'text-success',
-};
+  const todayDate = today();
 
-export default function HomePage() {
+  const [
+    { data: profile },
+    { data: dailyScore },
+    { data: habits },
+    { data: habitLogs },
+    { data: habitStreaks },
+    { data: supplements },
+    { data: supplementLogs },
+    { data: waterLogs },
+    { data: waterProfile },
+    { data: moodEntries },
+    { data: whoopToday },
+    { data: recentScores },
+  ] = await Promise.all([
+    supabase.from('profiles').select('*').eq('user_id', user.id).single(),
+    supabase.from('daily_scores').select('*').eq('user_id', user.id).eq('date', todayDate).single(),
+    supabase.from('habits').select('*').eq('user_id', user.id).eq('is_active', true).order('time_of_day').order('created_at'),
+    supabase.from('habit_logs').select('*').eq('user_id', user.id).eq('date', todayDate),
+    supabase.from('habit_streaks').select('*').eq('user_id', user.id),
+    supabase.from('supplements').select('*').eq('user_id', user.id).eq('is_active', true),
+    supabase.from('supplement_logs').select('*').eq('user_id', user.id).eq('date', todayDate),
+    supabase.from('water_logs').select('*').eq('user_id', user.id).eq('date', todayDate),
+    supabase.from('water_profile').select('*').eq('user_id', user.id).single(),
+    supabase.from('mood_entries').select('*').eq('user_id', user.id).eq('date', todayDate).order('created_at', { ascending: false }).limit(1),
+    supabase.from('whoop_data').select('*').eq('user_id', user.id).eq('date', todayDate).single(),
+    supabase.from('daily_scores').select('date, overall_score').eq('user_id', user.id).gte('date', daysAgo(6)).order('date'),
+  ]);
+
+  // Compute metrics
+  const totalHabits = habits?.length ?? 0;
+  const completedHabits = (habitLogs ?? []).filter((l) => l.completed).length;
+  const habitPct = totalHabits > 0 ? Math.round((completedHabits / totalHabits) * 100) : 0;
+
+  const totalSupps = supplements?.length ?? 0;
+  const takenSupps = (supplements ?? []).filter((s) => (supplementLogs ?? []).some((l) => l.supplement_id === s.id)).length;
+  const suppPct = totalSupps > 0 ? Math.round((takenSupps / totalSupps) * 100) : 0;
+
+  const waterTotal = (waterLogs ?? []).reduce((sum, l) => sum + l.amount_ml, 0);
+  const wp = waterProfile;
+  const waterTarget = wp?.weight_kg ? Math.round(wp.weight_kg * 35 * (wp.activity_level === 'very_active' ? 1.35 : wp.activity_level === 'active' ? 1.2 : 1)) : 3000;
+
+  const longestStreak = Math.max(0, ...(habitStreaks ?? []).map((s) => s.current_streak));
+
+  const latestMood = moodEntries?.[0] ?? null;
+
   return (
-    <div className="max-w-7xl mx-auto space-y-6">
-      <header className="flex items-end justify-between">
-        <div>
-          <p className="text-[10px] uppercase tracking-[0.3em] text-silver-dim mb-1">Today</p>
-          <h1 className="text-3xl md:text-4xl font-semibold tracking-tight">Good morning, Andres</h1>
-        </div>
-        <span className="text-xs num text-silver-dim hidden md:block">
-          {new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}
-        </span>
-      </header>
-
-      <section className="grid grid-cols-2 md:grid-cols-5 gap-3">
-        {STATS.map(({ label, value, sub, tone, icon: Icon }) => (
-          <GlassCard key={label} hover className="p-4">
-            <div className="flex items-center justify-between mb-3">
-              <span className="text-[10px] uppercase tracking-widest text-silver-dim">{label}</span>
-              <Icon className="w-3.5 h-3.5 text-silver-dim" />
-            </div>
-            <div className="flex items-baseline gap-1.5">
-              <span className={`num text-3xl font-semibold ${TONE_TEXT[tone] ?? 'text-white'}`}>
-                {value}
-              </span>
-              <span className="text-xs text-silver-dim num">{sub}</span>
-            </div>
-          </GlassCard>
-        ))}
-      </section>
-
-      <GlassCard hover>
-        <div className="flex items-center gap-2 mb-3">
-          <Sparkles className="w-4 h-4 text-gold" />
-          <span className="text-xs uppercase tracking-widest text-silver-dim">AI Daily Briefing</span>
-        </div>
-        <p className="text-sm leading-relaxed text-white/90">
-          Phase 1 placeholder. Once the AI engine is wired in Phase 2, this card will surface a
-          3–5 sentence assessment with <span className="text-gold">achievements</span> and{' '}
-          <span className="text-silver">areas for improvement</span> generated from today's
-          aggregated data.
-        </p>
-      </GlassCard>
-
-      <section className="grid grid-cols-1 lg:grid-cols-3 gap-3">
-        <GlassCard hover>
-          <h3 className="text-sm font-medium mb-3">Today's habits</h3>
-          <p className="text-xs text-silver-dim">Wired in Phase 2.</p>
-        </GlassCard>
-        <GlassCard hover>
-          <h3 className="text-sm font-medium mb-3">Training</h3>
-          <p className="text-xs text-silver-dim">Wired in Phase 3.</p>
-        </GlassCard>
-        <GlassCard hover>
-          <h3 className="text-sm font-medium mb-3">Water</h3>
-          <p className="text-xs text-silver-dim">Wired in Phase 2.</p>
-        </GlassCard>
-      </section>
-    </div>
+    <HomeDashboard
+      userName={profile?.name ?? 'there'}
+      dailyScore={dailyScore}
+      habitPct={habitPct}
+      completedHabits={completedHabits}
+      totalHabits={totalHabits}
+      suppPct={suppPct}
+      takenSupps={takenSupps}
+      totalSupps={totalSupps}
+      waterTotal={waterTotal}
+      waterTarget={waterTarget}
+      longestStreak={longestStreak}
+      whoop={whoopToday}
+      latestMood={latestMood}
+      recentScores={recentScores ?? []}
+      habits={habits ?? []}
+      habitLogs={habitLogs ?? []}
+    />
   );
 }

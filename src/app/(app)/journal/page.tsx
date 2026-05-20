@@ -1,4 +1,20 @@
-import { ComingSoon } from '@/components/ComingSoon';
-export default function Page() {
-  return <ComingSoon title="Mood & Energy Journal" phase="Phase 2" description="Quick mood / energy entries, multiple per day, factor correlation." />;
+import { redirect } from 'next/navigation';
+import { createClient } from '@/lib/supabase/server';
+import { JournalView } from './JournalView';
+import { daysAgo } from '@/lib/dates';
+
+export default async function JournalPage() {
+  const supabase = createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) redirect('/login');
+
+  const { data: entries } = await supabase
+    .from('mood_entries')
+    .select('*')
+    .eq('user_id', user.id)
+    .gte('date', daysAgo(89))
+    .order('date', { ascending: false })
+    .order('created_at', { ascending: false });
+
+  return <JournalView initialEntries={entries ?? []} />;
 }
