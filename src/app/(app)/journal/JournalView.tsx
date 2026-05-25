@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/Button';
 import { Input, Select, Textarea, Label, LabelText } from '@/components/ui/Input';
 import { today, daysAgo, formatDate, addDays } from '@/lib/dates';
 import { cn } from '@/lib/utils';
-import { Plus, SmilePlus, Zap, Sun, Cloud, Moon } from 'lucide-react';
+import { Plus, SmilePlus, Zap, Sun, Cloud, Moon, Trash2 } from 'lucide-react';
 
 type MoodEntry = {
   id: string;
@@ -21,7 +21,7 @@ type MoodEntry = {
   created_at: string;
 };
 
-const FACTOR_TAGS = ['sleep', 'training', 'social', 'work stress', 'nutrition', 'weather', 'caffeine', 'rest day'];
+const FACTOR_TAGS = ['sleep', 'training', 'social', 'school stress', 'nutrition', 'weather', 'caffeine', 'rest day'];
 const TOD_ICONS = { morning: Sun, afternoon: Cloud, evening: Moon };
 const MOOD_LABELS = ['', 'Very low', 'Low', 'Neutral', 'Good', 'Great'];
 const ENERGY_LABELS = ['', 'Exhausted', 'Low', 'Moderate', 'High', 'Peak'];
@@ -81,7 +81,13 @@ export function JournalView({ initialEntries }: Props) {
     return days;
   }, [entries, todayDate]);
 
+  const [hoverIdx, setHoverIdx] = useState<number | null>(null);
   const todayEntries = entries.filter((e) => e.date === todayDate);
+
+  async function deleteEntry(id: string) {
+    await supabase.from('mood_entries').delete().eq('id', id);
+    setEntries((p) => p.filter((e) => e.id !== id));
+  }
 
   return (
     <div className="max-w-5xl mx-auto space-y-6">
@@ -173,19 +179,31 @@ export function JournalView({ initialEntries }: Props) {
         </GlassCard>
       )}
 
-      {/* 30-day mini chart */}
+      {/* 30-day mini chart with glass tooltip */}
       <GlassCard>
         <LabelText>30-day trend</LabelText>
-        <div className="flex items-end gap-[2px] h-20 mt-2">
-          {chartData.map(({ date, mood: m, energy: e }) => {
+        <div className="relative flex items-end gap-[2px] h-20 mt-2">
+          {chartData.map(({ date, mood: m, energy: e }, idx) => {
             const val = m ?? 0;
             const eVal = e ?? 0;
             return (
-              <div key={date} className="flex-1 flex flex-col items-center gap-[1px]" title={`${formatDate(date)}: mood ${m ?? '—'} / energy ${e ?? '—'}`}>
+              <div
+                key={date}
+                className="flex-1 flex flex-col items-center gap-[1px] relative cursor-pointer"
+                onMouseEnter={() => setHoverIdx(idx)}
+                onMouseLeave={() => setHoverIdx(null)}
+              >
                 <div className="w-full flex flex-col gap-[1px] justify-end h-16">
-                  <div className="w-full bg-gold/40 rounded-sm" style={{ height: `${(val / 5) * 100}%` }} />
-                  <div className="w-full bg-blue-400/40 rounded-sm" style={{ height: `${(eVal / 5) * 100}%` }} />
+                  <div className="w-full bg-gold/40 rounded-sm transition-all" style={{ height: `${(val / 5) * 100}%` }} />
+                  <div className="w-full bg-blue-400/40 rounded-sm transition-all" style={{ height: `${(eVal / 5) * 100}%` }} />
                 </div>
+                {hoverIdx === idx && (
+                  <div className="absolute bottom-full mb-2 left-1/2 -translate-x-1/2 z-50 glass rounded-lg px-3 py-2 text-xs whitespace-nowrap shadow-2xl shadow-black/50 border border-white/[0.08]">
+                    <p className="font-medium text-white mb-0.5">{formatDate(date)}</p>
+                    <p className="text-gold num">Mood: {m ?? '—'}</p>
+                    <p className="text-blue-400 num">Energy: {e ?? '—'}</p>
+                  </div>
+                )}
               </div>
             );
           })}
@@ -208,7 +226,7 @@ export function JournalView({ initialEntries }: Props) {
             {todayEntries.map((entry) => {
               const TodIcon = entry.time_of_day ? TOD_ICONS[entry.time_of_day] : Sun;
               return (
-                <GlassCard key={entry.id} hover className="p-4 flex items-start gap-3">
+                <GlassCard key={entry.id} hover className="p-4 flex items-start gap-3 group">
                   <TodIcon className="w-4 h-4 text-silver-dim mt-0.5" />
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-3 mb-1">
@@ -231,6 +249,9 @@ export function JournalView({ initialEntries }: Props) {
                       </div>
                     )}
                   </div>
+                  <button onClick={() => deleteEntry(entry.id)} className="opacity-0 group-hover:opacity-100 p-1 rounded hover:bg-danger/10 text-danger transition">
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </button>
                 </GlassCard>
               );
             })}

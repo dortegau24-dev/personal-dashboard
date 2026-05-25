@@ -3,6 +3,8 @@ import { createClient } from '@/lib/supabase/server';
 import { JournalView } from './JournalView';
 import { daysAgo } from '@/lib/dates';
 
+export const dynamic = 'force-dynamic';
+
 export default async function JournalPage() {
   const supabase = createClient();
   const { data: { user } } = await supabase.auth.getUser();

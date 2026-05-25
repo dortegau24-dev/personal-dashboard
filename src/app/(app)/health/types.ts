@@ -41,6 +41,36 @@ export type WaterLog = {
   date: string;
 };
 
+export type NutritionLog = {
+  id: string;
+  user_id: string;
+  date: string;
+  meal_label: string;
+  description: string | null;
+  calories: number;
+  protein_g: number;
+  carbs_g: number;
+  fat_g: number;
+  fiber_g: number | null;
+  sugar_g: number | null;
+  sodium_mg: number | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type NutritionTargets = {
+  id: string;
+  user_id: string;
+  calories: number;
+  protein_g: number;
+  carbs_g: number;
+  fat_g: number;
+  created_at: string;
+  updated_at: string;
+};
+
+export const MEAL_LABELS = ['Breakfast', 'Lunch', 'Dinner', 'Snack', 'Pre-workout', 'Post-workout'] as const;
+
 export const SCHEDULE_SLOTS = ['morning', 'lunch', 'evening', 'custom'] as const;
 
 export const SLOT_LABELS: Record<string, string> = {

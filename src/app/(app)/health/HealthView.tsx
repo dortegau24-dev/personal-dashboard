@@ -6,26 +6,29 @@ import { today, daysAgo } from '@/lib/dates';
 import { SupplementChecklist } from './SupplementChecklist';
 import { SupplementManager } from './SupplementManager';
 import { WaterTracker } from './WaterTracker';
+import { NutritionTracker } from './NutritionTracker';
 import { Button } from '@/components/ui/Button';
 import { GlassCard } from '@/components/GlassCard';
-import { Plus, Droplets, Pill } from 'lucide-react';
-import type { Supplement, SupplementLog, WaterProfile, WaterLog } from './types';
+import { Plus, Droplets, Pill, Utensils } from 'lucide-react';
+import type { Supplement, SupplementLog, WaterProfile, WaterLog, NutritionLog, NutritionTargets } from './types';
 
 type Props = {
   supplements: Supplement[];
   supplementLogs: SupplementLog[];
   waterProfile: WaterProfile | null;
   waterLogs: WaterLog[];
+  nutritionLogs: NutritionLog[];
+  nutritionTargets: NutritionTargets | null;
 };
 
-export function HealthView({ supplements: initSupps, supplementLogs: initLogs, waterProfile, waterLogs: initWater }: Props) {
+export function HealthView({ supplements: initSupps, supplementLogs: initLogs, waterProfile, waterLogs: initWater, nutritionLogs, nutritionTargets }: Props) {
   const supabase = createClient();
   const [supplements, setSupplements] = useState(initSupps);
   const [suppLogs, setSuppLogs] = useState(initLogs);
   const [waterLogs, setWaterLogs] = useState(initWater);
   const [showSupMgr, setShowSupMgr] = useState(false);
   const [editingSup, setEditingSup] = useState<Supplement | null>(null);
-  const [tab, setTab] = useState<'supplements' | 'water'>('supplements');
+  const [tab, setTab] = useState<'supplements' | 'water' | 'diet'>('supplements');
 
   const todayDate = today();
   const takenCount = supplements.filter((s) => suppLogs.some((l) => l.supplement_id === s.id)).length;
@@ -52,6 +55,7 @@ export function HealthView({ supplements: initSupps, supplementLogs: initLogs, w
   const TABS = [
     { key: 'supplements', label: 'Supplements', icon: Pill },
     { key: 'water', label: 'Water', icon: Droplets },
+    { key: 'diet', label: 'Diet', icon: Utensils },
   ] as const;
 
   return (
@@ -118,6 +122,14 @@ export function HealthView({ supplements: initSupps, supplementLogs: initLogs, w
           profile={waterProfile}
           logs={waterLogs}
           onLogged={refreshWater}
+        />
+      )}
+
+      {tab === 'diet' && (
+        <NutritionTracker
+          logs={nutritionLogs}
+          targets={nutritionTargets}
+          onChanged={refreshSupps}
         />
       )}
 

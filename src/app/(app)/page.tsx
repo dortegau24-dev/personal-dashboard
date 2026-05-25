@@ -3,6 +3,8 @@ import { createClient } from '@/lib/supabase/server';
 import { HomeDashboard } from './HomeDashboard';
 import { today, daysAgo } from '@/lib/dates';
 
+export const dynamic = 'force-dynamic';
+
 export default async function HomePage() {
   const supabase = createClient();
   const { data: { user } } = await supabase.auth.getUser();
@@ -23,6 +25,8 @@ export default async function HomePage() {
     { data: moodEntries },
     { data: whoopToday },
     { data: recentScores },
+    { data: timeBlocks },
+    { data: accounts },
   ] = await Promise.all([
     supabase.from('profiles').select('*').eq('user_id', user.id).single(),
     supabase.from('daily_scores').select('*').eq('user_id', user.id).eq('date', todayDate).single(),
@@ -36,6 +40,8 @@ export default async function HomePage() {
     supabase.from('mood_entries').select('*').eq('user_id', user.id).eq('date', todayDate).order('created_at', { ascending: false }).limit(1),
     supabase.from('whoop_data').select('*').eq('user_id', user.id).eq('date', todayDate).single(),
     supabase.from('daily_scores').select('date, overall_score').eq('user_id', user.id).gte('date', daysAgo(6)).order('date'),
+    supabase.from('time_blocks').select('*').eq('user_id', user.id).eq('date', todayDate),
+    supabase.from('accounts').select('name, type, balance_usd').eq('user_id', user.id),
   ]);
 
   // Compute metrics
@@ -55,6 +61,8 @@ export default async function HomePage() {
 
   const latestMood = moodEntries?.[0] ?? null;
 
+  const netWorth = (accounts ?? []).reduce((sum, a) => sum + (Number(a.balance_usd) || 0), 0);
+
   return (
     <HomeDashboard
       userName={profile?.name ?? 'there'}
@@ -73,6 +81,9 @@ export default async function HomePage() {
       recentScores={recentScores ?? []}
       habits={habits ?? []}
       habitLogs={habitLogs ?? []}
+      timeBlocks={timeBlocks ?? []}
+      netWorth={netWorth}
+      accounts={accounts ?? []}
     />
   );
 }

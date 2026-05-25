@@ -3,70 +3,108 @@
 import { useState, useCallback } from 'react';
 import { GlassCard } from '@/components/GlassCard';
 import { Button } from '@/components/ui/Button';
-import { HabitChecklist } from './HabitChecklist';
-import { HabitManager } from './HabitManager';
-import { HabitStreaks } from './HabitStreaks';
-import { HabitHeatmap } from './HabitHeatmap';
-import { FreezeDayManager } from './FreezeDayManager';
+import { Input, Label, LabelText } from '@/components/ui/Input';
+import { Modal } from '@/components/ui/Modal';
 import { createClient } from '@/lib/supabase/client';
-import { today, dayOfWeek } from '@/lib/dates';
-import { Plus, Flame, CalendarHeart, BarChart3 } from 'lucide-react';
-import type { Habit, HabitLog, HabitStreak, FreezeDay } from './types';
+import { today } from '@/lib/dates';
+import { cn } from '@/lib/utils';
+import { Plus, Check, Trash2, Flame } from 'lucide-react';
+import type { Habit, HabitLog, HabitStreak } from './types';
 
 type Props = {
   initialHabits: Habit[];
   initialLogs: HabitLog[];
   initialStreaks: HabitStreak[];
-  recentLogs: { habit_id: string; date: string; completed: boolean }[];
-  freezeDays: FreezeDay[];
 };
 
-export function HabitsView({ initialHabits, initialLogs, initialStreaks, recentLogs, freezeDays: initialFreezeDays }: Props) {
+export function HabitsView({ initialHabits, initialLogs, initialStreaks }: Props) {
   const supabase = createClient();
   const [habits, setHabits] = useState<Habit[]>(initialHabits);
   const [logs, setLogs] = useState<HabitLog[]>(initialLogs);
   const [streaks, setStreaks] = useState<HabitStreak[]>(initialStreaks);
-  const [freezeDays, setFreezeDays] = useState<FreezeDay[]>(initialFreezeDays);
-  const [showManager, setShowManager] = useState(false);
-  const [showFreezeManager, setShowFreezeManager] = useState(false);
-  const [editingHabit, setEditingHabit] = useState<Habit | null>(null);
-  const [tab, setTab] = useState<'today' | 'streaks' | 'analytics'>('today');
+  const [showAdd, setShowAdd] = useState(false);
+  const [newName, setNewName] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [loading, setLoading] = useState<string | null>(null);
 
   const todayDate = today();
-  const dow = dayOfWeek(todayDate);
-  const isFreezeDay = freezeDays.some((f) => f.date === todayDate);
-
-  const todayHabits = habits.filter((h) => {
-    const days: number[] = Array.isArray(h.active_days) ? h.active_days : [0, 1, 2, 3, 4, 5, 6];
-    return days.includes(dow);
-  });
-
-  const completedCount = todayHabits.filter((h) => {
-    const log = logs.find((l) => l.habit_id === h.id);
-    return log?.completed;
-  }).length;
-  const pct = todayHabits.length > 0 ? Math.round((completedCount / todayHabits.length) * 100) : 0;
+  const completedCount = habits.filter((h) => logs.find((l) => l.habit_id === h.id)?.completed).length;
+  const pct = habits.length > 0 ? Math.round((completedCount / habits.length) * 100) : 0;
 
   const refreshData = useCallback(async () => {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
-    const [habitsRes, logsRes, streaksRes, freezeRes] = await Promise.all([
-      supabase.from('habits').select('*').eq('user_id', user.id).eq('is_active', true).order('time_of_day').order('created_at'),
+    const [habitsRes, logsRes, streaksRes] = await Promise.all([
+      supabase.from('habits').select('*').eq('user_id', user.id).eq('is_active', true).order('created_at'),
       supabase.from('habit_logs').select('*').eq('user_id', user.id).eq('date', todayDate),
       supabase.from('habit_streaks').select('*').eq('user_id', user.id),
-      supabase.from('freeze_days').select('*').eq('user_id', user.id).gte('date', `${new Date().getFullYear()}-01-01`),
     ]);
     if (habitsRes.data) setHabits(habitsRes.data);
     if (logsRes.data) setLogs(logsRes.data);
     if (streaksRes.data) setStreaks(streaksRes.data);
-    if (freezeRes.data) setFreezeDays(freezeRes.data);
   }, [supabase, todayDate]);
 
-  const TABS = [
-    { key: 'today', label: 'Today', icon: CalendarHeart },
-    { key: 'streaks', label: 'Streaks', icon: Flame },
-    { key: 'analytics', label: 'Analytics', icon: BarChart3 },
-  ] as const;
+  async function addHabit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!newName.trim()) return;
+    setSaving(true);
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+    await supabase.from('habits').insert({
+      user_id: user.id, name: newName.trim(), category: 'personal',
+      type: 'positive', frequency: 'daily', active_days: [0, 1, 2, 3, 4, 5, 6],
+      time_of_day: 'anytime', is_active: true,
+    });
+    setNewName('');
+    setShowAdd(false);
+    setSaving(false);
+    refreshData();
+  }
+
+  async function removeHabit(id: string) {
+    await supabase.from('habits').update({ is_active: false }).eq('id', id);
+    setHabits((p) => p.filter((h) => h.id !== id));
+  }
+
+  async function toggle(habit: Habit) {
+    setLoading(habit.id);
+    const existingLog = logs.find((l) => l.habit_id === habit.id);
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+
+    if (existingLog) {
+      await supabase.from('habit_logs').update({ completed: !existingLog.completed }).eq('id', existingLog.id);
+    } else {
+      await supabase.from('habit_logs').insert({ user_id: user.id, habit_id: habit.id, date: todayDate, completed: true });
+    }
+
+    // Update streak
+    const streak = streaks.find((s) => s.habit_id === habit.id);
+    const wasCompleted = existingLog?.completed ?? false;
+    const nowCompleted = !wasCompleted;
+
+    if (streak) {
+      const updates: Partial<HabitStreak> = {};
+      if (nowCompleted) {
+        updates.current_streak = streak.current_streak + 1;
+        updates.last_completed_date = todayDate;
+        if ((streak.current_streak + 1) > streak.longest_streak) {
+          updates.longest_streak = streak.current_streak + 1;
+        }
+      } else {
+        updates.current_streak = Math.max(0, streak.current_streak - 1);
+      }
+      await supabase.from('habit_streaks').update(updates).eq('id', streak.id);
+    } else if (nowCompleted) {
+      await supabase.from('habit_streaks').insert({
+        user_id: user.id, habit_id: habit.id,
+        current_streak: 1, longest_streak: 1, last_completed_date: todayDate,
+      });
+    }
+
+    setLoading(null);
+    refreshData();
+  }
 
   return (
     <div className="max-w-5xl mx-auto space-y-6">
@@ -75,15 +113,9 @@ export function HabitsView({ initialHabits, initialLogs, initialStreaks, recentL
           <p className="text-[10px] uppercase tracking-[0.3em] text-silver-dim mb-1">Discipline</p>
           <h1 className="text-3xl md:text-4xl font-semibold tracking-tight">Habits</h1>
         </div>
-        <div className="flex items-center gap-2">
-          <Button variant="ghost" size="sm" onClick={() => setShowFreezeManager(true)}>
-            <CalendarHeart className="w-3.5 h-3.5" />
-            Freeze days
-          </Button>
-          <Button size="sm" icon={<Plus className="w-3.5 h-3.5" />} onClick={() => { setEditingHabit(null); setShowManager(true); }}>
-            Add habit
-          </Button>
-        </div>
+        <Button size="sm" icon={<Plus className="w-3.5 h-3.5" />} onClick={() => setShowAdd(true)}>
+          Add habit
+        </Button>
       </header>
 
       {/* Score bar */}
@@ -93,72 +125,74 @@ export function HabitsView({ initialHabits, initialLogs, initialStreaks, recentL
             <span className="text-xs text-silver-dim uppercase tracking-widest">Today&apos;s completion</span>
             <span className="num text-sm">
               <span className="text-gold font-semibold">{completedCount}</span>
-              <span className="text-muted"> / {todayHabits.length}</span>
+              <span className="text-muted"> / {habits.length}</span>
             </span>
           </div>
           <div className="h-2 rounded-full bg-white/[0.06] overflow-hidden">
-            <div
-              className="h-full rounded-full transition-all duration-500 bg-gradient-to-r from-gold/70 to-gold"
-              style={{ width: `${pct}%` }}
-            />
+            <div className="h-full rounded-full transition-all duration-500 bg-gradient-to-r from-gold/70 to-gold" style={{ width: `${pct}%` }} />
           </div>
         </div>
         <div className="num text-3xl font-semibold text-gold-gradient">{pct}%</div>
-        {isFreezeDay && (
-          <span className="text-[10px] uppercase tracking-widest text-bronze border border-bronze/30 rounded-full px-2 py-0.5">
-            Freeze day
-          </span>
-        )}
       </GlassCard>
 
-      {/* Tabs */}
-      <div className="flex items-center gap-1 p-1 glass rounded-xl w-fit">
-        {TABS.map(({ key, label, icon: Icon }) => (
-          <button
-            key={key}
-            onClick={() => setTab(key)}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs transition ${
-              tab === key ? 'bg-white/[0.08] text-white' : 'text-silver-dim hover:text-white'
-            }`}
-          >
-            <Icon className="w-3.5 h-3.5" />
-            {label}
-          </button>
-        ))}
-      </div>
+      {/* Habit list */}
+      {habits.length === 0 ? (
+        <GlassCard className="text-center py-12">
+          <p className="text-silver-dim text-sm mb-2">No habits yet</p>
+          <p className="text-xs text-muted">Click &quot;Add habit&quot; to create your first daily discipline.</p>
+        </GlassCard>
+      ) : (
+        <div className="space-y-1.5">
+          {habits.map((habit) => {
+            const log = logs.find((l) => l.habit_id === habit.id);
+            const done = log?.completed ?? false;
+            const streak = streaks.find((s) => s.habit_id === habit.id);
+            const currentStreak = streak?.current_streak ?? 0;
 
-      {tab === 'today' && (
-        <HabitChecklist
-          habits={todayHabits}
-          logs={logs}
-          streaks={streaks}
-          isFreezeDay={isFreezeDay}
-          onToggle={refreshData}
-          onEdit={(h) => { setEditingHabit(h); setShowManager(true); }}
-        />
+            return (
+              <GlassCard
+                key={habit.id}
+                hover
+                className={cn('flex items-center gap-3 p-3 !rounded-xl group cursor-pointer', done && 'border-gold/20')}
+                onClick={() => toggle(habit)}
+              >
+                <div className={cn(
+                  'w-6 h-6 rounded-lg border-2 flex items-center justify-center transition',
+                  done ? 'bg-gold/20 border-gold' : 'border-white/20 hover:border-gold/40',
+                  loading === habit.id && 'animate-pulse',
+                )}>
+                  {done && <Check className="w-3 h-3 text-gold" />}
+                </div>
+
+                <span className={cn('flex-1 text-sm transition', done ? 'text-white' : 'text-silver')}>
+                  {habit.name}
+                </span>
+
+                {currentStreak > 0 && (
+                  <div className={cn('flex items-center gap-1 num text-xs', currentStreak >= 7 ? 'text-gold' : 'text-silver-dim')}>
+                    <Flame className={cn('w-3 h-3', currentStreak >= 7 && 'text-gold')} />
+                    {currentStreak}
+                  </div>
+                )}
+
+                <button
+                  onClick={(e) => { e.stopPropagation(); removeHabit(habit.id); }}
+                  className="opacity-0 group-hover:opacity-100 p-1 rounded hover:bg-danger/10 text-danger transition"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                </button>
+              </GlassCard>
+            );
+          })}
+        </div>
       )}
 
-      {tab === 'streaks' && (
-        <HabitStreaks habits={habits} streaks={streaks} />
-      )}
-
-      {tab === 'analytics' && (
-        <HabitHeatmap habits={habits} recentLogs={recentLogs} />
-      )}
-
-      <HabitManager
-        open={showManager}
-        onClose={() => { setShowManager(false); setEditingHabit(null); }}
-        habit={editingHabit}
-        onSaved={refreshData}
-      />
-
-      <FreezeDayManager
-        open={showFreezeManager}
-        onClose={() => setShowFreezeManager(false)}
-        freezeDays={freezeDays}
-        onSaved={refreshData}
-      />
+      <Modal open={showAdd} onClose={() => setShowAdd(false)} title="Add Habit">
+        <form onSubmit={addHabit} className="space-y-3">
+          <Label><LabelText>Habit name</LabelText><Input required placeholder="e.g. Cold shower, Read 30 min..." value={newName} onChange={(e) => setNewName(e.target.value)} autoFocus /></Label>
+          <Button type="submit" loading={saving} className="w-full mt-2">Add habit</Button>
+        </form>
+      </Modal>
     </div>
   );
 }

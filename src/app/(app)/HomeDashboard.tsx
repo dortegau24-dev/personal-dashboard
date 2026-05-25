@@ -5,7 +5,21 @@ import { useRouter } from 'next/navigation';
 import { GlassCard } from '@/components/GlassCard';
 import { Button } from '@/components/ui/Button';
 import { cn } from '@/lib/utils';
-import { Sparkles, TrendingUp, Activity, Flame, Heart, Droplets, Pill, SmilePlus, Zap, Loader2, Check, ShieldOff } from 'lucide-react';
+import { Sparkles, TrendingUp, Activity, Flame, Heart, Droplets, Pill, SmilePlus, Zap, Loader2, Check, ShieldOff, DollarSign, Clock, Wallet } from 'lucide-react';
+import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts';
+
+type TimeBlock = {
+  id: string;
+  category: string;
+  hours: number;
+  notes: string | null;
+};
+
+type Account = {
+  name: string;
+  type: string;
+  balance_usd: number;
+};
 
 type Props = {
   userName: string;
@@ -24,6 +38,9 @@ type Props = {
   recentScores: { date: string; overall_score: number }[];
   habits: { id: string; name: string; type: string; time_of_day: string | null }[];
   habitLogs: { habit_id: string; completed: boolean }[];
+  timeBlocks: TimeBlock[];
+  netWorth: number;
+  accounts: Account[];
 };
 
 function greeting(): string {
@@ -33,10 +50,57 @@ function greeting(): string {
   return 'Good evening';
 }
 
+const TIME_CATEGORY_COLORS: Record<string, string> = {
+  deepblock: '#D4AF37',
+  exercise: '#22c55e',
+  learning: '#3b82f6',
+  school: '#a855f7',
+  rest: '#6b7280',
+  sleep: '#818cf8',
+  social: '#CD7F32',
+  other: '#64748b',
+};
+
+const TIME_CATEGORY_LABELS: Record<string, string> = {
+  deepblock: 'DeepBlock',
+  exercise: 'Exercise',
+  learning: 'Learning',
+  school: 'School',
+  rest: 'Rest',
+  sleep: 'Sleep',
+  social: 'Social',
+  other: 'Other',
+};
+
+function computeTimeAllocation(blocks: TimeBlock[]) {
+  const categoryHours: Record<string, number> = {};
+  for (const block of blocks) {
+    const hrs = Number(block.hours) || 0;
+    if (hrs > 0) {
+      const cat = block.category?.toLowerCase() || 'other';
+      categoryHours[cat] = (categoryHours[cat] || 0) + hrs;
+    }
+  }
+  return Object.entries(categoryHours).map(([category, hrs]) => ({
+    name: TIME_CATEGORY_LABELS[category] || category.charAt(0).toUpperCase() + category.slice(1),
+    value: hrs,
+    hours: hrs.toFixed(1),
+    color: TIME_CATEGORY_COLORS[category] || '#64748b',
+  }));
+}
+
+function formatCurrency(value: number): string {
+  const abs = Math.abs(value);
+  if (abs >= 1_000_000) return `${(value / 1_000_000).toFixed(2)}M`;
+  if (abs >= 1_000) return `${(value / 1_000).toFixed(1)}K`;
+  return value.toFixed(2);
+}
+
 export function HomeDashboard({
   userName, dailyScore, habitPct, completedHabits, totalHabits,
   suppPct, takenSupps, totalSupps, waterTotal, waterTarget,
   longestStreak, whoop, latestMood, recentScores, habits, habitLogs,
+  timeBlocks, netWorth, accounts,
 }: Props) {
   const router = useRouter();
   const [scoring, setScoring] = useState(false);
@@ -135,6 +199,115 @@ export function HomeDashboard({
           </p>
         )}
       </GlassCard>
+
+      {/* Time Allocation + Net Worth */}
+      <section className="grid grid-cols-1 md:grid-cols-2 gap-3">
+        {/* Time Allocation Pie Chart */}
+        <GlassCard hover>
+          <div className="flex items-center gap-2 mb-4">
+            <Clock className="w-4 h-4 text-gold" />
+            <span className="text-xs uppercase tracking-widest text-silver-dim">Time Allocation</span>
+          </div>
+          {(() => {
+            const data = computeTimeAllocation(timeBlocks);
+            if (data.length === 0) {
+              return (
+                <div className="flex flex-col items-center justify-center h-48 text-center">
+                  <Clock className="w-8 h-8 text-silver-dim/30 mb-2" />
+                  <p className="text-sm text-silver-dim">No time blocks logged today</p>
+                  <p className="text-xs text-muted mt-1">Add blocks in the Time module</p>
+                </div>
+              );
+            }
+            const totalHrs = data.reduce((s, d) => s + d.value, 0);
+            return (
+              <div className="flex items-center gap-4">
+                <div className="w-40 h-40 flex-shrink-0">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <PieChart>
+                      <Pie
+                        data={data}
+                        cx="50%"
+                        cy="50%"
+                        innerRadius={36}
+                        outerRadius={64}
+                        paddingAngle={2}
+                        dataKey="value"
+                        stroke="none"
+                      >
+                        {data.map((entry, i) => (
+                          <Cell key={i} fill={entry.color} fillOpacity={0.85} />
+                        ))}
+                      </Pie>
+                      <Tooltip
+                        content={({ payload }) => {
+                          if (!payload?.length) return null;
+                          const d = payload[0].payload;
+                          return (
+                            <div className="glass rounded-lg px-3 py-2 text-xs">
+                              <span className="font-medium">{d.name}</span>
+                              <span className="text-silver-dim ml-2 num">{d.hours}h</span>
+                            </div>
+                          );
+                        }}
+                      />
+                    </PieChart>
+                  </ResponsiveContainer>
+                </div>
+                <div className="flex-1 space-y-1.5 min-w-0">
+                  {data.sort((a, b) => b.value - a.value).map((d) => (
+                    <div key={d.name} className="flex items-center gap-2 text-xs">
+                      <div className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: d.color }} />
+                      <span className="text-white/80 truncate">{d.name}</span>
+                      <span className="num text-silver-dim ml-auto flex-shrink-0">{d.hours}h</span>
+                    </div>
+                  ))}
+                  <div className="pt-1.5 mt-1.5 border-t border-white/[0.06]">
+                    <span className="text-[10px] uppercase tracking-widest text-silver-dim">Total</span>
+                    <span className="num text-xs text-gold ml-2">{totalHrs.toFixed(1)}h</span>
+                  </div>
+                </div>
+              </div>
+            );
+          })()}
+        </GlassCard>
+
+        {/* Net Worth Card */}
+        <GlassCard hover>
+          <div className="flex items-center gap-2 mb-4">
+            <Wallet className="w-4 h-4 text-gold" />
+            <span className="text-xs uppercase tracking-widest text-silver-dim">Net Worth</span>
+          </div>
+          <div className="flex items-baseline gap-2 mb-4">
+            <span className="text-[10px] text-silver-dim">$</span>
+            <span className="num text-4xl font-semibold text-gold-gradient">{formatCurrency(netWorth)}</span>
+            <span className="text-xs text-silver-dim">USD</span>
+          </div>
+          {accounts.length > 0 ? (
+            <div className="space-y-2">
+              <p className="text-[10px] uppercase tracking-widest text-silver-dim mb-2">Accounts</p>
+              {accounts.map((a, i) => (
+                <div key={i} className="flex items-center justify-between text-xs">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <DollarSign className="w-3 h-3 text-silver-dim flex-shrink-0" />
+                    <span className="text-white/80 truncate">{a.name}</span>
+                    <span className="text-[10px] text-muted uppercase">{a.type}</span>
+                  </div>
+                  <span className={cn('num flex-shrink-0 ml-2', Number(a.balance_usd) >= 0 ? 'text-success' : 'text-danger')}>
+                    ${formatCurrency(Number(a.balance_usd))}
+                  </span>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="flex flex-col items-center justify-center h-24 text-center">
+              <DollarSign className="w-8 h-8 text-silver-dim/30 mb-2" />
+              <p className="text-sm text-silver-dim">No accounts added yet</p>
+              <p className="text-xs text-muted mt-1">Add accounts in the Finance module</p>
+            </div>
+          )}
+        </GlassCard>
+      </section>
 
       {/* Middle cards */}
       <section className="grid grid-cols-1 md:grid-cols-3 gap-3">
