@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { GlassCard } from '@/components/GlassCard';
 import { Button } from '@/components/ui/Button';
 import { cn } from '@/lib/utils';
-import { Sparkles, TrendingUp, Activity, Flame, Heart, Droplets, Pill, SmilePlus, Zap, Loader2, Check, ShieldOff, DollarSign, Clock, Wallet } from 'lucide-react';
+import { Sparkles, TrendingUp, Activity, Flame, Heart, Droplets, Pill, SmilePlus, Zap, Loader2, Check, ShieldOff, DollarSign, Clock, Wallet, RefreshCw } from 'lucide-react';
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts';
 
 type TimeBlock = {
@@ -104,6 +104,27 @@ export function HomeDashboard({
 }: Props) {
   const router = useRouter();
   const [scoring, setScoring] = useState(false);
+  const [whoopSyncing, setWhoopSyncing] = useState(false);
+  const [whoopSyncMsg, setWhoopSyncMsg] = useState<string | null>(null);
+
+  async function syncWhoop() {
+    setWhoopSyncing(true);
+    setWhoopSyncMsg(null);
+    try {
+      const res = await fetch('/api/whoop/sync', { method: 'POST' });
+      const json = await res.json();
+      if (!res.ok) {
+        setWhoopSyncMsg(json.error ?? 'Sync failed');
+      } else {
+        setWhoopSyncMsg(`✓ Synced ${json.synced} day(s)`);
+        router.refresh();
+      }
+    } catch {
+      setWhoopSyncMsg('Network error');
+    }
+    setWhoopSyncing(false);
+    setTimeout(() => setWhoopSyncMsg(null), 4000);
+  }
 
   async function triggerScore() {
     setScoring(true);
@@ -155,6 +176,37 @@ export function HomeDashboard({
           </GlassCard>
         ))}
       </section>
+
+      {/* Whoop Sync */}
+      <GlassCard hover className="flex items-center justify-between gap-4">
+        <div className="flex items-center gap-3">
+          <Activity className="w-5 h-5 text-gold" />
+          <div>
+            <p className="text-xs font-medium">Whoop Data</p>
+            <p className="text-[10px] text-silver-dim">
+              {whoop?.recovery_score != null
+                ? `Recovery ${whoop.recovery_score}% · Strain ${whoop.strain?.toFixed(1) ?? '—'} · HRV ${whoop.hrv ?? '—'}`
+                : 'No Whoop data yet — connect in Settings or sync now'}
+            </p>
+          </div>
+        </div>
+        <div className="flex items-center gap-2">
+          {whoopSyncMsg && (
+            <span className={cn('text-[10px] num', whoopSyncMsg.startsWith('✓') ? 'text-success' : 'text-danger')}>
+              {whoopSyncMsg}
+            </span>
+          )}
+          <Button
+            size="sm"
+            variant="secondary"
+            loading={whoopSyncing}
+            onClick={syncWhoop}
+            icon={whoopSyncing ? undefined : <RefreshCw className="w-3.5 h-3.5" />}
+          >
+            Sync Whoop
+          </Button>
+        </div>
+      </GlassCard>
 
       {/* AI Briefing */}
       <GlassCard hover>
