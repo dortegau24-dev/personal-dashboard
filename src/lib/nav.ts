@@ -23,6 +23,21 @@ export const NAV_ITEMS: NavItem[] = [
   { href: '/settings',  label: 'Settings',  icon: Settings },
 ];
 
+// Top 4 most-used tabs shown in mobile bottom bar; 5th slot is "More" drawer
 export const MOBILE_TABS: NavItem[] = [
-  NAV_ITEMS[0], NAV_ITEMS[1], NAV_ITEMS[2], NAV_ITEMS[4], NAV_ITEMS[10],
+  NAV_ITEMS[0], // Home
+  NAV_ITEMS[1], // Health
+  NAV_ITEMS[2], // Training
+  NAV_ITEMS[4], // Habits
+];
+
+// Everything not in MOBILE_TABS — shown inside the "More" drawer
+export const MOBILE_MORE: NavItem[] = [
+  NAV_ITEMS[3],  // Finance
+  NAV_ITEMS[5],  // Time
+  NAV_ITEMS[6],  // Knowledge
+  NAV_ITEMS[7],  // Social
+  NAV_ITEMS[8],  // Goals
+  NAV_ITEMS[9],  // Journal
+  NAV_ITEMS[10], // Settings
 ];
