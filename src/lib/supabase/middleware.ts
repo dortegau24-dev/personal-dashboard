@@ -6,10 +6,22 @@ const PUBLIC_PATHS = ['/login', '/auth/callback', '/api/auth/pin'];
 export async function updateSession(request: NextRequest) {
   let response = NextResponse.next({ request });
 
-  const supabase = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+
+  // If Supabase isn't configured, skip auth and let the request through
+  if (!url || !key) {
+    const isPublic = PUBLIC_PATHS.some((p) => request.nextUrl.pathname.startsWith(p));
+    if (!isPublic) {
+      const redirectUrl = request.nextUrl.clone();
+      redirectUrl.pathname = '/login';
+      return NextResponse.redirect(redirectUrl);
+    }
+    return response;
+  }
+
+  try {
+    const supabase = createServerClient(url, key, {
       cookies: {
         getAll() {
           return request.cookies.getAll();
@@ -22,22 +34,30 @@ export async function updateSession(request: NextRequest) {
           );
         },
       },
+    });
+
+    const { data: { user } } = await supabase.auth.getUser();
+
+    const isPublic = PUBLIC_PATHS.some((p) => request.nextUrl.pathname.startsWith(p));
+    if (!user && !isPublic) {
+      const redirectUrl = request.nextUrl.clone();
+      redirectUrl.pathname = '/login';
+      return NextResponse.redirect(redirectUrl);
     }
-  );
 
-  const { data: { user } } = await supabase.auth.getUser();
-
-  const isPublic = PUBLIC_PATHS.some((p) => request.nextUrl.pathname.startsWith(p));
-  if (!user && !isPublic) {
-    const url = request.nextUrl.clone();
-    url.pathname = '/login';
-    return NextResponse.redirect(url);
-  }
-
-  if (user && request.nextUrl.pathname === '/login') {
-    const url = request.nextUrl.clone();
-    url.pathname = '/';
-    return NextResponse.redirect(url);
+    if (user && request.nextUrl.pathname === '/login') {
+      const redirectUrl = request.nextUrl.clone();
+      redirectUrl.pathname = '/';
+      return NextResponse.redirect(redirectUrl);
+    }
+  } catch {
+    // If Supabase auth fails, redirect to login
+    const isPublic = PUBLIC_PATHS.some((p) => request.nextUrl.pathname.startsWith(p));
+    if (!isPublic) {
+      const redirectUrl = request.nextUrl.clone();
+      redirectUrl.pathname = '/login';
+      return NextResponse.redirect(redirectUrl);
+    }
   }
 
   return response;
