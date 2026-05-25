@@ -13,8 +13,6 @@ type Profile = {
   age: number | null;
   unit_preference: 'metric' | 'imperial';
   accent_color: string | null;
-  whoop_api_token: string | null;
-  openrouter_api_key: string | null;
 };
 
 export function SettingsForm({ initialProfile }: { initialProfile: Profile | null }) {
@@ -45,8 +43,6 @@ export function SettingsForm({ initialProfile }: { initialProfile: Profile | nul
         age: profile.age != null ? Number(profile.age) : null,
         unit_preference: profile.unit_preference ?? 'metric',
         accent_color: profile.accent_color ?? 'gold',
-        whoop_api_token: profile.whoop_api_token ?? null,
-        openrouter_api_key: profile.openrouter_api_key ?? null,
       };
       const { error } = await supabase
         .from('profiles')
@@ -111,31 +107,11 @@ export function SettingsForm({ initialProfile }: { initialProfile: Profile | nul
 
       <section>
         <h2 className="text-xs uppercase tracking-widest text-silver-dim mb-3">API keys</h2>
-        <p className="text-[11px] text-silver-dim mb-3 leading-relaxed">
-          Keys stored in Supabase (RLS protected). Server-side API routes will use these for sync
-          and AI calls — never exposed to the client.
+        <p className="text-[11px] text-silver-dim leading-relaxed">
+          API keys (OpenRouter, Whoop) are configured via Vercel environment variables and never
+          stored in the database for security. To rotate them, update them in your Vercel project
+          settings.
         </p>
-        <div className="grid grid-cols-1 gap-3">
-          <Field label="OpenRouter API key">
-            <input
-              type="password"
-              autoComplete="off"
-              placeholder="sk-or-..."
-              value={profile.openrouter_api_key ?? ''}
-              onChange={(e) => set('openrouter_api_key', e.target.value)}
-              className={inputCls}
-            />
-          </Field>
-          <Field label="Whoop API token">
-            <input
-              type="password"
-              autoComplete="off"
-              value={profile.whoop_api_token ?? ''}
-              onChange={(e) => set('whoop_api_token', e.target.value)}
-              className={inputCls}
-            />
-          </Field>
-        </div>
       </section>
 
       {error && <p className="text-xs text-danger">{error}</p>}

@@ -8,8 +8,15 @@ import { Modal } from '@/components/ui/Modal';
 import { createClient } from '@/lib/supabase/client';
 import { today } from '@/lib/dates';
 import { cn } from '@/lib/utils';
-import { Plus, Check, Trash2, Flame } from 'lucide-react';
+import { Plus, Check, Trash2, Flame, Sparkles, TrendingDown, Lightbulb, AlertTriangle, Loader2 } from 'lucide-react';
 import type { Habit, HabitLog, HabitStreak } from './types';
+
+type AIInsights = {
+  summary: string;
+  patterns: string[];
+  risks: string[];
+  suggestions: string[];
+};
 
 type Props = {
   initialHabits: Habit[];
@@ -26,6 +33,26 @@ export function HabitsView({ initialHabits, initialLogs, initialStreaks }: Props
   const [newName, setNewName] = useState('');
   const [saving, setSaving] = useState(false);
   const [loading, setLoading] = useState<string | null>(null);
+  const [insights, setInsights] = useState<AIInsights | null>(null);
+  const [insightsLoading, setInsightsLoading] = useState(false);
+  const [insightsErr, setInsightsErr] = useState<string | null>(null);
+
+  async function generateInsights() {
+    setInsightsLoading(true);
+    setInsightsErr(null);
+    try {
+      const res = await fetch('/api/ai/habits-insights', { method: 'POST' });
+      const json = await res.json();
+      if (!res.ok) {
+        setInsightsErr(json.error ?? 'Failed to generate insights');
+      } else {
+        setInsights(json);
+      }
+    } catch (e) {
+      setInsightsErr(e instanceof Error ? e.message : 'Network error');
+    }
+    setInsightsLoading(false);
+  }
 
   const todayDate = today();
   const completedCount = habits.filter((h) => logs.find((l) => l.habit_id === h.id)?.completed).length;
@@ -133,6 +160,79 @@ export function HabitsView({ initialHabits, initialLogs, initialStreaks }: Props
           </div>
         </div>
         <div className="num text-3xl font-semibold text-gold-gradient">{pct}%</div>
+      </GlassCard>
+
+      {/* AI Insights card */}
+      <GlassCard>
+        <div className="flex items-center justify-between mb-3">
+          <div className="flex items-center gap-2">
+            <Sparkles className="w-4 h-4 text-gold" />
+            <span className="text-xs uppercase tracking-widest text-silver-dim">AI Insights</span>
+          </div>
+          <Button
+            size="sm"
+            variant="secondary"
+            loading={insightsLoading}
+            onClick={generateInsights}
+            icon={insightsLoading ? undefined : <Sparkles className="w-3 h-3" />}
+          >
+            {insights ? 'Regenerate' : 'Generate insights'}
+          </Button>
+        </div>
+
+        {insightsErr && <p className="text-xs text-danger mb-2">{insightsErr}</p>}
+
+        {!insights && !insightsLoading && !insightsErr && (
+          <p className="text-sm text-silver-dim">
+            Tap <strong>Generate insights</strong> for a 30-day analysis of patterns, streak risks, and tips.
+          </p>
+        )}
+
+        {insightsLoading && (
+          <div className="flex items-center gap-2 text-sm text-silver-dim py-4 justify-center">
+            <Loader2 className="w-4 h-4 animate-spin text-gold" />
+            Analyzing 30 days of habit data…
+          </div>
+        )}
+
+        {insights && (
+          <div className="space-y-4">
+            <p className="text-sm leading-relaxed text-white/90">{insights.summary}</p>
+
+            {insights.patterns?.length > 0 && (
+              <div>
+                <p className="text-[10px] uppercase tracking-widest text-gold/70 mb-1.5 flex items-center gap-1.5">
+                  <TrendingDown className="w-3 h-3" /> Patterns
+                </p>
+                {insights.patterns.map((p, i) => (
+                  <p key={i} className="text-xs text-gold/90 pl-3 border-l border-gold/20 mb-1">{p}</p>
+                ))}
+              </div>
+            )}
+
+            {insights.risks?.length > 0 && (
+              <div>
+                <p className="text-[10px] uppercase tracking-widest text-danger/70 mb-1.5 flex items-center gap-1.5">
+                  <AlertTriangle className="w-3 h-3" /> At risk
+                </p>
+                {insights.risks.map((r, i) => (
+                  <p key={i} className="text-xs text-danger/90 pl-3 border-l border-danger/20 mb-1">{r}</p>
+                ))}
+              </div>
+            )}
+
+            {insights.suggestions?.length > 0 && (
+              <div>
+                <p className="text-[10px] uppercase tracking-widest text-silver/70 mb-1.5 flex items-center gap-1.5">
+                  <Lightbulb className="w-3 h-3" /> Suggestions
+                </p>
+                {insights.suggestions.map((s, i) => (
+                  <p key={i} className="text-xs text-silver/80 pl-3 border-l border-silver/20 mb-1">{s}</p>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
       </GlassCard>
 
       {/* Habit list */}

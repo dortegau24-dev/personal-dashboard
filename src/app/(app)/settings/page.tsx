@@ -1,18 +1,19 @@
 import { redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
-import { GlassCard } from '@/components/GlassCard';
 import { SettingsForm } from './SettingsForm';
+import { WhoopConnection } from './WhoopConnection';
+
+export const dynamic = 'force-dynamic';
 
 export default async function SettingsPage() {
   const supabase = createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) redirect('/login');
 
-  const { data: profile } = await supabase
-    .from('profiles')
-    .select('*')
-    .eq('user_id', user.id)
-    .single();
+  const [{ data: profile }, { data: whoopToken }] = await Promise.all([
+    supabase.from('profiles').select('*').eq('user_id', user.id).single(),
+    supabase.from('whoop_tokens').select('user_id').eq('user_id', user.id).maybeSingle(),
+  ]);
 
   return (
     <div className="max-w-3xl mx-auto space-y-6">
@@ -24,15 +25,11 @@ export default async function SettingsPage() {
 
       <SettingsForm initialProfile={profile ?? null} />
 
-      <GlassCard>
-        <h3 className="text-sm font-medium mb-2">Coming in later phases</h3>
-        <ul className="text-xs text-silver-dim space-y-1.5 leading-relaxed">
-          <li>• Supplement CRUD, habit CRUD, freeze-day manager (Phase 2)</li>
-          <li>• Whoop OAuth connect + sync frequency (Phase 3)</li>
-          <li>• Time categories, financial accounts, jiujitsu technique library (Phase 4)</li>
-          <li>• AI scoring prompt editor, ticker preferences, CSV export, backup</li>
-        </ul>
-      </GlassCard>
+      <WhoopConnection
+        connected={!!whoopToken}
+        autoSync={profile?.whoop_auto_sync ?? true}
+        lastSync={profile?.whoop_last_sync ?? null}
+      />
     </div>
   );
 }
