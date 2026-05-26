@@ -138,16 +138,18 @@ export function FinanceView({ accounts: initAcc, subscriptions: initSubs, purcha
   async function addAccount(e: React.FormEvent) {
     e.preventDefault();
     setSaving(true);
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return;
-    const balLocal = Number(acctBalance) || 0;
-    const rate = Number(acctRate) || 1;
-    const { data } = await supabase.from('accounts').insert({
-      user_id: user.id, name: acctName, type: acctType, currency: acctCurrency,
-      balance_local: balLocal, exchange_rate_to_usd: rate, balance_usd: balLocal * rate,
-    }).select().single();
-    if (data) { setAccounts((p) => [...p, data]); setShowAcct(false); setAcctName(''); setAcctBalance(''); }
-    setSaving(false);
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) { alert('Session expired — please log in again.'); window.location.href = '/login'; return; }
+      const balLocal = Number(acctBalance) || 0;
+      const rate = Number(acctRate) || 1;
+      const { data, error } = await supabase.from('accounts').insert({
+        user_id: user.id, name: acctName, type: acctType, currency: acctCurrency,
+        balance_local: balLocal, exchange_rate_to_usd: rate, balance_usd: balLocal * rate,
+      }).select().single();
+      if (error) { alert(`Failed to add account: ${error.message}`); return; }
+      if (data) { setAccounts((p) => [...p, data]); setShowAcct(false); setAcctName(''); setAcctBalance(''); }
+    } finally { setSaving(false); }
   }
 
   async function deleteAccount(id: string) {
@@ -158,14 +160,16 @@ export function FinanceView({ accounts: initAcc, subscriptions: initSubs, purcha
   async function addSubscription(e: React.FormEvent) {
     e.preventDefault();
     setSaving(true);
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return;
-    const { data } = await supabase.from('subscriptions').insert({
-      user_id: user.id, name: subName, cost_usd: Number(subCost), cycle: subCycle,
-      category: subCategory || null, renewal_date: subRenewal || null,
-    }).select().single();
-    if (data) { setSubs((p) => [...p, data]); setShowSub(false); setSubName(''); setSubCost(''); }
-    setSaving(false);
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) { alert('Session expired — please log in again.'); window.location.href = '/login'; return; }
+      const { data, error } = await supabase.from('subscriptions').insert({
+        user_id: user.id, name: subName, cost_usd: Number(subCost), cycle: subCycle,
+        category: subCategory || null, renewal_date: subRenewal || null,
+      }).select().single();
+      if (error) { alert(`Failed to add subscription: ${error.message}`); return; }
+      if (data) { setSubs((p) => [...p, data]); setShowSub(false); setSubName(''); setSubCost(''); }
+    } finally { setSaving(false); }
   }
 
   async function deleteSub(id: string) {
@@ -176,16 +180,18 @@ export function FinanceView({ accounts: initAcc, subscriptions: initSubs, purcha
   async function addPurchase(e: React.FormEvent) {
     e.preventDefault();
     setSaving(true);
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return;
-    const cost = Number(purchCost);
-    const nwPct = netWorth > 0 ? (cost / netWorth) * 100 : null;
-    const { data } = await supabase.from('purchases').insert({
-      user_id: user.id, item_name: purchItem, cost_usd: cost, date: purchDate,
-      category: purchCategory, net_worth_percentage: nwPct,
-    }).select().single();
-    if (data) { setPurchases((p) => [data, ...p]); setShowPurch(false); setPurchItem(''); setPurchCost(''); }
-    setSaving(false);
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) { alert('Session expired — please log in again.'); window.location.href = '/login'; return; }
+      const cost = Number(purchCost);
+      const nwPct = netWorth > 0 ? (cost / netWorth) * 100 : null;
+      const { data, error } = await supabase.from('purchases').insert({
+        user_id: user.id, item_name: purchItem, cost_usd: cost, date: purchDate,
+        category: purchCategory, net_worth_percentage: nwPct,
+      }).select().single();
+      if (error) { alert(`Failed to add purchase: ${error.message}`); return; }
+      if (data) { setPurchases((p) => [data, ...p]); setShowPurch(false); setPurchItem(''); setPurchCost(''); }
+    } finally { setSaving(false); }
   }
 
   async function deletePurchase(id: string) {
@@ -196,14 +202,16 @@ export function FinanceView({ accounts: initAcc, subscriptions: initSubs, purcha
   async function addWishItem(e: React.FormEvent) {
     e.preventDefault();
     setSaving(true);
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return;
-    const { data } = await supabase.from('wish_list').insert({
-      user_id: user.id, item_name: wishItem, estimated_cost_usd: Number(wishCost) || null,
-      priority: wishPriority, link: wishLink || null, image_url: wishImage || null,
-    }).select().single();
-    if (data) { setWishList((p) => [...p, data]); setShowWish(false); setWishItem(''); setWishCost(''); setWishLink(''); setWishImage(''); }
-    setSaving(false);
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) { alert('Session expired — please log in again.'); window.location.href = '/login'; return; }
+      const { data, error } = await supabase.from('wish_list').insert({
+        user_id: user.id, item_name: wishItem, estimated_cost_usd: Number(wishCost) || null,
+        priority: wishPriority, link: wishLink || null, image_url: wishImage || null,
+      }).select().single();
+      if (error) { alert(`Failed to add wish item: ${error.message}`); return; }
+      if (data) { setWishList((p) => [...p, data]); setShowWish(false); setWishItem(''); setWishCost(''); setWishLink(''); setWishImage(''); }
+    } finally { setSaving(false); }
   }
 
   async function deleteWishItem(id: string) {
@@ -214,15 +222,16 @@ export function FinanceView({ accounts: initAcc, subscriptions: initSubs, purcha
   async function addIncome(e: React.FormEvent) {
     e.preventDefault();
     setSaving(true);
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return;
-    const { data, error } = await supabase.from('income_logs').insert({
-      user_id: user.id, amount_usd: Number(incomeAmount), source: incomeSource || null,
-      date: incomeDate, notes: incomeNotes || null,
-    }).select().single();
-    if (error) console.error('Failed to add income:', error);
-    if (data) { setIncomeLogs((p) => [data, ...p]); setShowIncome(false); setIncomeAmount(''); setIncomeSource(''); setIncomeNotes(''); }
-    setSaving(false);
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) { alert('Session expired — please log in again.'); window.location.href = '/login'; return; }
+      const { data, error } = await supabase.from('income_logs').insert({
+        user_id: user.id, amount_usd: Number(incomeAmount), source: incomeSource || null,
+        date: incomeDate, notes: incomeNotes || null,
+      }).select().single();
+      if (error) { alert(`Failed to add income: ${error.message}`); return; }
+      if (data) { setIncomeLogs((p) => [data, ...p]); setShowIncome(false); setIncomeAmount(''); setIncomeSource(''); setIncomeNotes(''); }
+    } finally { setSaving(false); }
   }
 
   async function deleteIncome(id: string) {

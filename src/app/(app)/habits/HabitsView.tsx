@@ -75,17 +75,21 @@ export function HabitsView({ initialHabits, initialLogs, initialStreaks }: Props
     e.preventDefault();
     if (!newName.trim()) return;
     setSaving(true);
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return;
-    await supabase.from('habits').insert({
-      user_id: user.id, name: newName.trim(), category: 'personal',
-      type: 'positive', frequency: 'daily', active_days: [0, 1, 2, 3, 4, 5, 6],
-      time_of_day: 'anytime', is_active: true,
-    });
-    setNewName('');
-    setShowAdd(false);
-    setSaving(false);
-    refreshData();
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) { alert('Session expired — please log in again.'); window.location.href = '/login'; return; }
+      const { error } = await supabase.from('habits').insert({
+        user_id: user.id, name: newName.trim(), category: 'personal',
+        type: 'positive', frequency: 'daily', active_days: [0, 1, 2, 3, 4, 5, 6],
+        time_of_day: 'anytime', is_active: true,
+      });
+      if (error) { alert(`Failed to add habit: ${error.message}`); return; }
+      setNewName('');
+      setShowAdd(false);
+      refreshData();
+    } finally {
+      setSaving(false);
+    }
   }
 
   async function removeHabit(id: string) {
@@ -95,9 +99,10 @@ export function HabitsView({ initialHabits, initialLogs, initialStreaks }: Props
 
   async function toggle(habit: Habit) {
     setLoading(habit.id);
+    try {
     const existingLog = logs.find((l) => l.habit_id === habit.id);
     const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return;
+    if (!user) { alert('Session expired — please log in again.'); window.location.href = '/login'; return; }
 
     if (existingLog) {
       await supabase.from('habit_logs').update({ completed: !existingLog.completed }).eq('id', existingLog.id);
@@ -129,8 +134,10 @@ export function HabitsView({ initialHabits, initialLogs, initialStreaks }: Props
       });
     }
 
-    setLoading(null);
     refreshData();
+    } finally {
+      setLoading(null);
+    }
   }
 
   return (
